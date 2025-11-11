@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Fichiers d'environnement (secrets, variables, etc.)
+.env
+.env.*
+**/.env*
+**/.env.secrets
+
+# Fichiers de clef SSH ou certificats
+**/clef_aurel.pem
+*.pem
+
+# Airflow: fichiers sensibles ou temporaires
+airflow.txt
+logs/
+dags/__pycache__/
+data/
+
+# Jenkins (si jamais tu stockes du Jenkinsfile ou logs)
+jenkins_home/
+*.log
+
+# VS Code / IDE
+.vscode/
+.idea/
+
+# Autres caches
+*.egg-info/
+dist/
+build/
