@@ -2,6 +2,7 @@ import os
 from typing import Any, Dict, List, Union
 
 import pandas as pd
+import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, RootModel
@@ -10,6 +11,12 @@ from model_utils import load_champion_pipeline_and_threshold, set_mlflow_uri, RE
 
 from typing import Any, Dict, List, Union, Annotated
 from fastapi import Body
+
+import requests
+import json
+
+
+REALTIME_API_URL = os.getenv("REALTIME_API_URL")
 
 EXAMPLE_RECORD = {
     "merchant": "fraud_Kilback LLC",
@@ -164,6 +171,86 @@ def predict(
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Inference error: {e}")
+    
+@app.get("/realtime-predict")
+def realtime_predict():
+    """
+    Récupère une transaction depuis l'API temps réel
+    et renvoie la prédiction de fraude.
+    """
+    # 1) Appel API temps réel + désérialisation robuste
+    try:
+        resp = requests.get(REALTIME_API_URL, timeout=5)
+        resp.raise_for_status()
+        payload = resp.json()  # peut être un dict OU une chaîne JSON
+        if isinstance(payload, str):
+            payload = json.loads(payload)  # <- on convertit la chaîne en dict
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur API temps réel : {e}")
+
+    # 2) Vérifs de schéma attendus ("split": columns + data)
+    try:
+        if not isinstance(payload, dict):
+            raise ValueError("Le payload n'est pas un objet JSON")
+        if "columns" not in payload or "data" not in payload:
+            raise KeyError("Clés attendues manquantes: 'columns' et 'data'")
+        df = pd.DataFrame(payload["data"], columns=payload["columns"])
+        if df.empty:
+            raise ValueError("Aucune transaction reçue")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur parsing JSON : {e}")
+
+    # 3) Feature engineering identique à l'entraînement
+    try:
+        # dates
+        df["dob"] = pd.to_datetime(df["dob"], errors="coerce")
+        # la source renvoie "current_time" (datetime courant côté serveur temps réel)
+        df["current_time"] = pd.to_datetime(df["current_time"], errors="coerce")
+
+        # dérivées temps
+        df["age"] = (df["current_time"].dt.year - df["dob"].dt.year)
+        df["year"] = df["current_time"].dt.year
+        df["month"] = df["current_time"].dt.month
+        df["day_of_week"] = df["current_time"].dt.dayofweek
+        df["hour"] = df["current_time"].dt.hour
+        df["is_weekend"] = df["day_of_week"].isin([5, 6]).astype(int)
+
+        # distance Haversine
+        def haversine_distance(lat1, lon1, lat2, lon2):
+            R = 6371
+            lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+            dlat, dlon = lat2 - lat1, lon2 - lon1
+            a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
+            return R * (2 * np.arcsin(np.sqrt(a)))
+
+        df["distance_km"] = haversine_distance(
+            df["lat"], df["long"], df["merch_lat"], df["merch_long"]
+        )
+
+        # features finales (comme au training)
+        features = [
+            "merchant", "category", "amt", "gender", "state", "job",
+            "city_pop", "distance_km", "age", "year", "month",
+            "day_of_week", "hour", "is_weekend"
+        ]
+        X = df[features]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur feature engineering : {e}")
+
+    # 4) Prédiction modèle champion
+    try:
+        proba = PIPELINE.predict_proba(X)[:, 1][0]
+        pred = int(proba >= BEST_THRESHOLD)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur inference : {e}")
+
+    return {
+        "merchant": df["merchant"].iloc[0],
+        "amount": float(df["amt"].iloc[0]),
+        "proba_fraud": round(float(proba), 4),
+        "is_fraud": bool(pred),
+        "threshold": float(BEST_THRESHOLD)
+    }
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
