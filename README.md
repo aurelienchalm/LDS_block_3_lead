@@ -162,6 +162,7 @@ curl http://localhost:7871/current-transactions
 ## 🐳 Docker — Build & Run
 
 ### 1️⃣ API Temps réel
+#### en local
 ```bash
 docker build -t realtime-api \
     -f realtime-api/Dockerfile \
@@ -170,7 +171,25 @@ docker rm -f realtime-api 2>/dev/null || true
 docker run -p 7871:8001 --name realtime-api realtime-api
 ```
 
+#### sur EC2 
+```bash
+docker network create fraud-net 2>/dev/null || true
+docker build -t realtime-api \
+    -f realtime-api/Dockerfile \
+    realtime-api
+docker rm -f realtime-api 2>/dev/null || true
+docker run -d \
+  --name realtime-api \
+  --restart always \
+  --network fraud-net \
+  -p 7871:8001 \
+  realtime-api
+```
+
+**URL :** `http://ip:7871/docs`
+
 ### 2️⃣ API de prédiction
+#### en local
 ```bash
 docker build -t fraud-app \
     -f app/Dockerfile \
@@ -179,23 +198,63 @@ docker rm -f fraud-app 2>/dev/null || true
 docker run --env-file .env -p 7860:8000 --name fraud-app fraud-app
 ```
 
-### Vérification :
-- http://localhost:7870/docs → FastAPI docs
-- http://localhost:7871 → page HTML de l’API temps réel
+#### sur EC2 
+```bash
+docker build -t fraud-app \
+    -f app/Dockerfile \
+    app
+docker rm -f fraud-app 2>/dev/null || true
+docker run -d \
+  --name fraud-app \
+  --restart always \
+  --network fraud-net \
+  --env-file .env \
+  -p 7860:8000 \
+  fraud-app
+```
 
-**URL :** `http://localhost:7860/docs`
+**URL :** `http://ip:7860/docs`
 
 ---
 
 ## 🔗 Intégration entre les deux APIs
-Le `REALTIME_API_URL` est passé dans `.env` :
+Le `REALTIME_API_URL` est passé dans `.env` en local :
 ```
 REALTIME_API_URL=http://host.docker.internal:7871/current-transactions
 ```
 
-Si les deux containers tournent sur un même réseau :
+Sur EC2 : 
 ```
 REALTIME_API_URL=http://realtime-api:8001/current-transactions
+```
+
+---
+
+## 🚀 Streamlit : interface de consulatation des fraudes
+
+### 🐳 Docker — Build & Run
+
+```bash
+docker build -t fraud-streamlit \
+    -f app_streamlit/Dockerfile \
+    app_streamlit
+
+docker rm -f fraud-streamlit 2>/dev/null || true
+
+docker run -d \
+  --name fraud-streamlit \
+  --restart always \
+  --env-file .env \
+  -p 8501:8501 \
+  fraud-streamlit
+```
+
+Sur EC2 pour arrêter tout : 
+
+```bash
+docker rm -f realtime-api
+docker rm -f fraud-app
+docker rm -f fraud-streamlit
 ```
 
 ---
