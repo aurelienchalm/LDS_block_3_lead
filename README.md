@@ -163,14 +163,18 @@ curl http://localhost:7871/current-transactions
 
 ### 1️⃣ API Temps réel
 ```bash
-docker build -t realtime-api .
+docker build -t realtime-api \
+    -f realtime-api/Dockerfile \
+    realtime-api
 docker rm -f realtime-api 2>/dev/null || true
 docker run -p 7871:8001 --name realtime-api realtime-api
 ```
 
 ### 2️⃣ API de prédiction
 ```bash
-docker build -t fraud-app app
+docker build -t fraud-app \
+    -f app/Dockerfile \
+    app
 docker rm -f fraud-app 2>/dev/null || true
 docker run --env-file .env -p 7860:8000 --name fraud-app fraud-app
 ```

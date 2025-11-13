@@ -1,88 +1,139 @@
-# model_utils.py
 import os
 from pathlib import Path
-from typing import Tuple
 from dotenv import load_dotenv
+
 import mlflow
 from mlflow.tracking import MlflowClient
+from sqlalchemy import create_engine
+import pandas as pd
 
-REGISTERED_NAME = os.getenv("REGISTERED_NAME", "fraud-detection-xgb-pipeline")
+import requests
 
-def set_mlflow_uri() -> None:
+# ───────────────────────────────────────────────
+# 1) Chargement du .env
+# ───────────────────────────────────────────────
+# En local : .env à la racine du repo (../.env par rapport à app/model_utils.py)
+# En Docker : les variables viennent de --env-file .env (load_dotenv ne gêne pas)
+env_path = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(dotenv_path=env_path, override=True)
+
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
+REGISTERED_NAME = os.getenv("REGISTERED_NAME")
+DATABASE_URL = os.getenv("POSTGRES_DATABASE")
+
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+RESEND_SENDER = os.getenv("RESEND_SENDER", "onboarding@resend.dev")
+RESEND_TO = os.getenv("RESEND_TO")
+
+if not MLFLOW_TRACKING_URI:
+    raise RuntimeError("MLFLOW_TRACKING_URI n'est pas défini dans l'environnement")
+
+if not DATABASE_URL:
+    raise RuntimeError("POSTGRES_DATABASE n'est pas défini dans l'environnement")
+
+# ───────────────────────────────────────────────
+# 2) Initialisation MLflow
+# ───────────────────────────────────────────────
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+client = MlflowClient()
+
+
+# ───────────────────────────────────────────────
+# 3) Fonction : charger pipeline champion
+# ───────────────────────────────────────────────
+def load_champion_pipeline_and_threshold():
     """
-    Configure mlflow.set_tracking_uri depuis MLFLOW_TRACKING_URI.
-    - lit d'abord l'env (docker --env-file .env),
-    - sinon tente de charger un .env si présent.
+    Charge le pipeline champion (alias @champion) et le seuil optimal.
+    Retourne (pipeline_sklearn, best_threshold: float, model_version: int)
     """
-    uri = os.getenv("MLFLOW_TRACKING_URI")
-    if not uri:
-        # on essaie quelques emplacements possibles du .env
-        candidates = [
-            Path("/app/.env"),
-            Path(__file__).resolve().parents[0] / ".env",
-            Path(__file__).resolve().parents[1] / ".env",
-        ]
-        for p in candidates:
-            if p.exists():
-                load_dotenv(dotenv_path=p, override=True)
-                uri = os.getenv("MLFLOW_TRACKING_URI")
-                if uri:
-                    break
-    if not uri:
-        raise RuntimeError("MLFLOW_TRACKING_URI manquant (variable d'env ou .env).")
-    mlflow.set_tracking_uri(uri)
+    mv = client.get_model_version_by_alias(REGISTERED_NAME, "champion")
+
+    pipeline = mlflow.sklearn.load_model(f"models:/{REGISTERED_NAME}@champion")
+
+    best_threshold = float(mv.tags.get("best_threshold", 0.5))
+
+    return pipeline, best_threshold, mv.version
 
 
-def load_champion_pipeline_and_threshold(
-    registered_name: str | None = None,
-) -> Tuple[object, float, object]:
+# ───────────────────────────────────────────────
+# 4) Base de données (SQLAlchemy)
+# ───────────────────────────────────────────────
+engine = create_engine(DATABASE_URL)
+
+
+def insert_prediction(df: pd.DataFrame, table_name: str = "fraud_realtime_predictions"):
     """
-    Charge le pipeline 'champion' depuis le Model Registry MLflow et récupère le seuil 'best_threshold'.
-    1) alias @champion
-    2) tag champion:true
-    3) stage Production
+    Insère un DataFrame dans PostgreSQL via SQLAlchemy.
+    Utilisé pour stocker les prédictions temps réel dans NeonDB.
     """
-    set_mlflow_uri()
-    client = MlflowClient()
-    name = registered_name or REGISTERED_NAME
+    df.to_sql(table_name, engine, if_exists="append", index=False)
 
-    # 1) alias champion
-    try:
-        if hasattr(client, "get_model_version_by_alias"):
-            mv = client.get_model_version_by_alias(name, "champion")
-            pipe = mlflow.sklearn.load_model(f"models:/{name}@champion")
-            thr = float(mv.tags["best_threshold"])
-            return pipe, thr, mv
-    except Exception:
-        pass
+# ───────────────────────────────────────────────
+# 4) Envoie des mails
+# ───────────────────────────────────────────────
 
-    # 2) tag champion:true
-    mv = None
-    versions = client.search_model_versions(f"name='{name}'")
-    for v in versions:
-        if v.tags.get("champion", "").lower() == "true":
-            mv = v
-            break
+def send_fraud_alert_email(
+    merchant: str,
+    amount: float,
+    proba_fraud: float,
+    trans_num: str,
+    transaction_time,
+    city: str | None = None,
+    state: str | None = None,
+):
+    """
+    Envoie un email d'alerte via Resend lorsqu'une fraude est détectée.
+    """
+    if not RESEND_API_KEY or not RESEND_TO:
+        print("⚠️ RESEND_API_KEY ou RESEND_TO manquants, pas d'email envoyé.")
+        return
 
-    # 3) stage Production
-    if mv is None:
-        latest = client.get_latest_versions(name, stages=["Production"])
-        if not latest:
-            raise RuntimeError(
-                f"Aucune version trouvée pour '{name}' (alias/tag/stage)."
-            )
-        mv = latest[0]
+    # Formatage propre
+    time_str = (
+        transaction_time.isoformat()
+        if hasattr(transaction_time, "isoformat")
+        else str(transaction_time)
+    )
+    location = f"{city}, {state}" if city and state else "Localisation inconnue"
 
-    # chargement par stage ou run_id
-    try:
-        uri = f"models:/{name}/{mv.current_stage}" if mv.current_stage else f"runs:/{mv.run_id}/model"
-        pipe = mlflow.sklearn.load_model(uri)
-    except Exception:
-        pipe = mlflow.sklearn.load_model(f"runs:/{mv.run_id}/model")
+    subject = f"[ALERTE FRAUDE] Transaction suspecte de {amount:.2f} $ chez {merchant}"
 
-    if "best_threshold" not in mv.tags:
-        raise RuntimeError(
-            f"Tag 'best_threshold' absent sur la version champion (name={name}, version={mv.version})."
-        )
-    thr = float(mv.tags["best_threshold"])
-    return pipe, thr, mv
+    html_body = f"""
+    <html>
+      <body>
+        <h2>🚨 Alerte fraude détectée</h2>
+        <p>Une transaction potentiellement frauduleuse vient d'être détectée :</p>
+        <ul>
+          <li><b>Commerçant :</b> {merchant}</li>
+          <li><b>Montant :</b> {amount:.2f} $</li>
+          <li><b>Probabilité de fraude :</b> {proba_fraud:.2%}</li>
+          <li><b>Date de transaction :</b> {time_str}</li>
+          <li><b>Localisation :</b> {location}</li>
+          <li><b>Transac num. :</b> {trans_num}</li>
+        </ul>
+        <p>Cette alerte a été générée automatiquement par le modèle XGBoost (pipeline MLflow).</p>
+      </body>
+    </html>
+    """
+
+    payload = {
+        "from": f"Fraud Detector <{RESEND_SENDER}>",
+        "to": [RESEND_TO],
+        "subject": subject,
+        "html": html_body,
+    }
+
+    resp = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=10,
+    )
+
+    if resp.status_code >= 400:
+        print(f"❌ Erreur Resend ({resp.status_code}): {resp.text}")
+    else:
+        print("✅ Email d'alerte fraude envoyé avec succès.")

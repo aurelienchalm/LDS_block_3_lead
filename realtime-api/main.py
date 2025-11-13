@@ -66,16 +66,26 @@ def startup():
 # ── Endpoints "compat" (1 seul record, comme l’API d’origine)
 @app.get("/current-transactions")
 @limiter.limit("5/minute")
-def current_transactions(request: Request): 
-    if _RT_DF is None:
-        raise HTTPException(500, "Dataframe not loaded")
-    # reproduire le sampling "p=0.001" de l’API originale
+async def current_transactions(request: Request):
+    """
+    Return one current transaction in .to_json(orient="split") format.
+    """
     p = 0.001
-    df = _RT_DF.copy()
-    # simulateur simple: sample global (plus lisible qu'un skiprows ici)
-    row = df.sample().loc[:, ~df.columns.isin(["trans_date_trans_time", "fraud", "unix_time"])]
-    row["current_time"] = datetime.now()
-    return row.to_json(orient="split")
+    filename = "https://lead-program-assets.s3.eu-west-3.amazonaws.com/M05-Projects/fraudTest.csv"
+
+    df = pd.read_csv(
+        filename,
+        header=0,
+        index_col=[0],
+        skiprows=lambda i: i > 0 and random.random() > p,
+    )
+
+    # On prend UNE ligne au hasard pour simuler du temps réel...
+    df = df.sample(1)
+
+    df = df.loc[:, ~df.columns.isin(["fraud"])]
+
+    return df.to_json(orient="split", date_format="iso")
 
 # ── Endpoints batch pour Airflow
 class RTBatch(BaseModel):
