@@ -259,20 +259,21 @@ docker rm -f fraud-streamlit
 
 ---
 
+## 🚀 Airflow comme orchestrateur
+
+3 DAG orchestrent : 
+- La prédiction depuis l'api temps réél
+- L'emission d'un reporting journalier de toutes les prédictions du jour
+- Le drift de la donnée avec Evidently 
+
+---
+
 ## 📊 Résultats du modèle (XGBoost)
 
 | Jeu | F1-score | Precision | Recall | Threshold |
 |-----|-----------|------------|---------|------------|
 | Train | 0.97 | 0.94 | 0.99 | 0.94 |
 | Test  | 0.86 | 0.88 | 0.83 | 0.94 |
-
----
-
-## 🧩 Prochaines étapes
-- Intégration dans **Airflow** (déclenchement automatique via DAG)
-- Monitoring des performances avec **Evidently**
-- Stockage NeonDB des prédictions temps réel
-- Ajout d’une interface Streamlit pour visualiser les alertes fraude
 
 ---
 
