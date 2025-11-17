@@ -230,7 +230,7 @@ REALTIME_API_URL=http://realtime-api:8001/current-transactions
 
 ---
 
-## 🚀 Streamlit : interface de consulatation des fraudes
+## 🚀 Streamlit : interface de consultation des fraudes
 
 ### 🐳 Docker — Build & Run
 
