@@ -16,35 +16,6 @@ from fraud_training import main, build_features, TARGET
 
 POSTGRES_DATABASE = os.getenv("POSTGRES_DATABASE")
 
-def test_fraud_training_runs():
-    """
-    Test d'intégration simple :
-    - Vérifie que le script de ré-entrainement s'exécute sans lever d'exception.
-    - Si ça se termine sans erreur → test OK.
-    """
-    main()
-
-
-def test_fraud_training_end_to_end():
-    """
-    Test d'intégration : vérifie que le script fraud_training.py
-    s'exécute sans lever d'exception.
-
-    Il utilisera :
-    - POSTGRES_DATABASE pour se connecter à NeonDB
-    - MLFLOW_TRACKING_URI pour se connecter à MLflow
-    - MODEL_NAME / REGISTERED_NAME pour le registry
-    (tous fournis via le .env injecté par Jenkins).
-    """
-    # Petit sanity check pour être sûr qu'on a bien les vars clés
-    assert os.getenv("POSTGRES_DATABASE"), "POSTGRES_DATABASE doit être défini dans le .env"
-    assert os.getenv("MLFLOW_TRACKING_URI"), "MLFLOW_TRACKING_URI doit être défini dans le .env"
-    assert os.getenv("MODEL_NAME"), "MODEL_NAME doit être défini dans le .env"
-    assert os.getenv("REGISTERED_NAME"), "REGISTERED_NAME doit être défini dans le .env"
-
-    # Appel direct à la fonction main() de ton script
-    main()
-    
 def make_minimal_raw_df():
     return pd.DataFrame([
         {
@@ -130,4 +101,26 @@ def test_fraud_training_dataset_basic_quality():
 
     # Pas de nulls sur des colonnes critiques (au moins dans l’échantillon)
     for col in ["amt", "city_pop", "merchant", "category"]:
-        assert df[col].notna().all() 
+        assert df[col].notna().all()
+        
+def test_fraud_training_end_to_end():
+    """
+    Test d'intégration : vérifie que le script fraud_training.py
+    s'exécute sans lever d'exception.
+
+    Il utilisera :
+    - POSTGRES_DATABASE pour se connecter à NeonDB
+    - MLFLOW_TRACKING_URI pour se connecter à MLflow
+    - MODEL_NAME / REGISTERED_NAME pour le registry
+    (tous fournis via le .env injecté par Jenkins).
+    """
+    # Petit sanity check pour être sûr qu'on a bien les vars clés
+    assert os.getenv("POSTGRES_DATABASE"), "POSTGRES_DATABASE doit être défini dans le .env"
+    assert os.getenv("MLFLOW_TRACKING_URI"), "MLFLOW_TRACKING_URI doit être défini dans le .env"
+    assert os.getenv("MODEL_NAME"), "MODEL_NAME doit être défini dans le .env"
+    assert os.getenv("REGISTERED_NAME"), "REGISTERED_NAME doit être défini dans le .env"
+
+    # Appel direct à la fonction main() de ton script
+    main()
+        
+
