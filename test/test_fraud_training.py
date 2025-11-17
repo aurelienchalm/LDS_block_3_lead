@@ -2,8 +2,23 @@
 
 import os
 from pathlib import Path
+import sys
+
+# Ajouter le chemin du projet (racine) dans sys.path
+# /app/test/test_fraud_training.py → on remonte d'un niveau vers /app
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from fraud_training import main
+
+def test_fraud_training_runs():
+    """
+    Test d'intégration simple :
+    - Vérifie que le script de ré-entrainement s'exécute sans lever d'exception.
+    - Si ça se termine sans erreur → test OK.
+    """
+    main()
 
 
 def test_fraud_training_end_to_end():

@@ -22,5 +22,8 @@ RUN pip install --upgrade pip && \
 # On copie tout le code du repo (fraud_training.py, etc.)
 COPY . /app
 
+# Debug : vérifier le contenu
+#RUN ls -R /app
+
 # Pytest va lancer notre test d'intégration de ré-entrainement
 CMD ["pytest", "test/test_fraud_training.py", "-s", "-vv"]
