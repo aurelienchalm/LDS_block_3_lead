@@ -15,7 +15,7 @@ pipeline {
         stage('Préparer le .env') {
             steps {
                 // 🔴 ICI : on utilise un credential dédié au projet Fraud/Stripe
-                withCredentials([file(credentialsId: 'fraud_env_file', variable: 'REAL_ENV')]) {
+                withCredentials([file(credentialsId: 'stripe_fraud_env', variable: 'REAL_ENV')]) {
                     script {
                         sh "rm -f $WORKSPACE/$ENV_PATH"
                         def envContent = readFile("${REAL_ENV}")
