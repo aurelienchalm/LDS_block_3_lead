@@ -4,7 +4,7 @@ pipeline {
     environment {
         // Nom du fichier .env injecté dans le workspace
         ENV_PATH   = 'injected.env'
-        // Destinataire des mails (si tu veux garder la notif)
+        // Destinataire des mails
         RECIPIENTS = 'aurelien.chalm@gmail.com'
         // Nom de l'image Docker de test
         IMAGE_NAME = 'fraud-train-test'
@@ -14,7 +14,8 @@ pipeline {
 
         stage('Préparer le .env') {
             steps {
-                withCredentials([file(credentialsId: 'env_file', variable: 'REAL_ENV')]) {
+                // 🔴 ICI : on utilise un credential dédié au projet Fraud/Stripe
+                withCredentials([file(credentialsId: 'fraud_env_file', variable: 'REAL_ENV')]) {
                     script {
                         sh "rm -f $WORKSPACE/$ENV_PATH"
                         def envContent = readFile("${REAL_ENV}")
@@ -46,7 +47,7 @@ pipeline {
         stage('Lancer les tests (retrain)') {
             steps {
                 script {
-                    // Le CMD du Dockerfile lance pytest
+                    // Le CMD du Dockerfile lance pytest ou ton script
                     sh """
                     docker run --rm \
                       --env-file $ENV_PATH \
