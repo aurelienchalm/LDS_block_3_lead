@@ -1,0 +1,104 @@
+pipeline {
+    agent any
+
+    environment {
+        // Nom du fichier .env injecté dans le workspace
+        ENV_PATH   = 'injected.env'
+        // Destinataire des mails (si tu veux garder la notif)
+        RECIPIENTS = 'aurelien.chalm@gmail.com'
+        // Nom de l'image Docker de test
+        IMAGE_NAME = 'fraud-train-test'
+    }
+
+    stages {
+
+        stage('Préparer le .env') {
+            steps {
+                withCredentials([file(credentialsId: 'env_file', variable: 'REAL_ENV')]) {
+                    script {
+                        sh "rm -f $WORKSPACE/$ENV_PATH"
+                        def envContent = readFile("${REAL_ENV}")
+                        writeFile file: "$WORKSPACE/$ENV_PATH", text: envContent
+                        sh "ls -l $WORKSPACE/$ENV_PATH"
+                    }
+                }
+            }
+        }
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build image de test') {
+            steps {
+                script {
+                    sh """
+                    docker build \
+                      -t ${IMAGE_NAME} \
+                      -f test/Dockerfile.train .
+                    """
+                }
+            }
+        }
+
+        stage('Lancer les tests (retrain)') {
+            steps {
+                script {
+                    // Le CMD du Dockerfile lance pytest
+                    sh """
+                    docker run --rm \
+                      --env-file $ENV_PATH \
+                      ${IMAGE_NAME}
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            emailext(
+                subject: "✅ [OK] Job ${env.JOB_NAME} build #${env.BUILD_NUMBER}",
+                body: """
+Bonjour collègue,
+
+Le job ${env.JOB_NAME} a réussi avec le build #${env.BUILD_NUMBER}.
+
+🔗 Voir les logs : ${env.BUILD_URL}console
+
+Bien à toi,
+Ton Jenkins préféré
+""",
+                to: "${env.RECIPIENTS}",
+                from: "aurelien.chalm@gmail.com"
+            )
+        }
+
+        failure {
+            emailext(
+                subject: "❌ [ECHEC] Job ${env.JOB_NAME} build #${env.BUILD_NUMBER}",
+                body: """
+Bonjour collègue,
+
+Le job ${env.JOB_NAME} a échoué sur le build #${env.BUILD_NUMBER}.
+
+🔗 Voir les logs : ${env.BUILD_URL}console
+
+Bon courage pour le debug,
+Ton Jenkins préféré
+""",
+                to: "${env.RECIPIENTS}",
+                from: "aurelien.chalm@gmail.com"
+            )
+        }
+
+        always {
+            script {
+                // Optionnel: nettoyage de l'image
+                sh "docker image ls ${IMAGE_NAME} || true"
+            }
+        }
+    }
+}

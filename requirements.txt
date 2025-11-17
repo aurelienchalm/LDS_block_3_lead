@@ -1,0 +1,10 @@
+sqlalchemy
+psycopg2-binary
+python-dotenv
+pandas
+numpy
+mlflow==2.13.0
+scikit-learn==1.4.2
+xgboost
+joblib
+boto3
