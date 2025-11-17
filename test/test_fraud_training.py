@@ -78,7 +78,7 @@ def test_build_features_with_transaction_time_instead_of_trans_date():
     # On vérifie que l’age a bien été calculé
     assert "age" in df_fe.columns
     assert not df_fe["age"].isna().any()
-"""    
+    
 def get_engine():
     assert POSTGRES_DATABASE, "POSTGRES_DATABASE doit être défini"
     return create_engine(POSTGRES_DATABASE)
@@ -102,7 +102,7 @@ def test_fraud_training_dataset_basic_quality():
     # Pas de nulls sur des colonnes critiques (au moins dans l’échantillon)
     for col in ["amt", "city_pop", "merchant", "category"]:
         assert df[col].notna().all()
-"""     
+    
 def test_fraud_training_end_to_end():
     """
     Test d'intégration : vérifie que le script fraud_training.py
