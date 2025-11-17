@@ -4,6 +4,7 @@ import numpy as np
 import os
 from pathlib import Path
 import sys
+from sqlalchemy import create_engine
 
 # Ajouter le chemin du projet (racine) dans sys.path
 # /app/test/test_fraud_training.py → on remonte d'un niveau vers /app
@@ -12,6 +13,8 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from fraud_training import main, build_features, TARGET
+
+POSTGRES_DATABASE = os.getenv("POSTGRES_DATABASE")
 
 def test_fraud_training_runs():
     """
@@ -103,4 +106,28 @@ def test_build_features_with_transaction_time_instead_of_trans_date():
 
     # On vérifie que l’age a bien été calculé
     assert "age" in df_fe.columns
-    assert not df_fe["age"].isna().any()   
+    assert not df_fe["age"].isna().any()
+    
+def get_engine():
+    assert POSTGRES_DATABASE, "POSTGRES_DATABASE doit être défini"
+    return create_engine(POSTGRES_DATABASE)
+
+
+def test_fraud_training_dataset_basic_quality():
+    engine = get_engine()
+    df = pd.read_sql("SELECT * FROM fraud_training_dataset LIMIT 10000", con=engine)
+
+    # Non vide
+    assert len(df) > 0
+
+    # Target présente & dans {0,1}
+    assert "is_fraud" in df.columns
+    assert set(df["is_fraud"].unique()) <= {0, 1}
+
+    # Quelques colonnes obligatoires
+    for col in ["amt", "city_pop", "merchant", "category", "gender", "state", "job"]:
+        assert col in df.columns
+
+    # Pas de nulls sur des colonnes critiques (au moins dans l’échantillon)
+    for col in ["amt", "city_pop", "merchant", "category"]:
+        assert df[col].notna().all() 
