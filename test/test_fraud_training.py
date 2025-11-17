@@ -11,7 +11,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from fraud_training import main
+from fraud_training import main, build_features, TARGET
 
 def test_fraud_training_runs():
     """
@@ -41,6 +41,7 @@ def test_fraud_training_end_to_end():
 
     # Appel direct à la fonction main() de ton script
     main()
+    
 def make_minimal_raw_df():
     return pd.DataFrame([
         {
