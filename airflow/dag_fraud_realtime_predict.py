@@ -36,7 +36,7 @@ default_args = {
 with DAG(
     dag_id="fraud_realtime_predict",
     start_date=datetime(2024, 1, 1),
-    schedule="*/5 * * * *",  # toutes les 5 minutes
+    schedule="*/30 * * * *",  # toutes les 5 minutes
     catchup=False,
     default_args=default_args,
     tags=["fraude", "api", "realtime"],
