@@ -10,11 +10,12 @@ import json
 import tempfile
 
 import pandas as pd
+import numpy as np
 import boto3
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from io import StringIO
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 from evidently.report import Report
 from evidently.metric_preset import DataDriftPreset
@@ -125,18 +126,69 @@ with DAG(
         """
 
         # -------------------------
-        # 1) Chargement baseline S3
+        # 1) Construire la baseline depuis fraud_training_dataset (NeonDB)
+        #    + la déposer en CSV sur S3
         # -------------------------
-        s3_hook = S3Hook(aws_conn_id=AWS_CONN_ID)
+        engine = get_neondb_engine()
 
+        # On récupère tout le dataset d'entraînement (raw)
+        df_raw = pd.read_sql("SELECT * FROM fraud_training_dataset", con=engine)
+
+        if df_raw.empty:
+            raise AirflowFailException(
+                "La table fraud_training_dataset est vide, impossible de construire la baseline."
+            )
+
+        df = df_raw.copy()
+
+        # 1.1 Dates -> age, year, month, day_of_week, hour, is_weekend
+        df["dob"] = pd.to_datetime(df["dob"], errors="coerce")
+        df["trans_date_trans_time"] = pd.to_datetime(df["trans_date_trans_time"], errors="coerce")
+
+        df["age"] = df["trans_date_trans_time"].dt.year - df["dob"].dt.year
+        df["year"] = df["trans_date_trans_time"].dt.year
+        df["month"] = df["trans_date_trans_time"].dt.month
+        df["day_of_week"] = df["trans_date_trans_time"].dt.dayofweek
+        df["hour"] = df["trans_date_trans_time"].dt.hour
+        df["is_weekend"] = df["day_of_week"].isin([5, 6]).astype(int)
+
+        # 1.2 Distance Haversine (lat/long → distance_km)
+        for col in ["lat", "long", "merch_lat", "merch_long"]:
+            df[col] = df[col].astype(float)
+
+        def haversine_distance(lat1, lon1, lat2, lon2):
+            R = 6371  # km
+            lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+            a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+            c = 2 * np.arcsin(np.sqrt(a))
+            return R * c
+
+        df["distance_km"] = haversine_distance(
+            df["lat"], df["long"], df["merch_lat"], df["merch_long"]
+        )
+
+        # 1.3 On garde uniquement les features utilisées par Evidently
+        df_baseline = df[FEATURE_COLS].copy()
+
+        # Optionnel : nettoyer un peu (supprimer les lignes avec NaN sur les features)
+        df_baseline = df_baseline.dropna(subset=FEATURE_COLS)
+
+        # 1.4 Sauvegarde de cette baseline sur S3 au même endroit qu'avant
+        s3_hook = S3Hook(aws_conn_id=AWS_CONN_ID)
         baseline_bucket = Variable.get("FRAUD_BASELINE_BUCKET")
         baseline_key = Variable.get("FRAUD_BASELINE_KEY")
 
-        csv_str = s3_hook.read_key(key=baseline_key, bucket_name=baseline_bucket)
-        df_baseline = pd.read_csv(StringIO(csv_str))
+        csv_buffer = df_baseline.to_csv(index=False)
+        s3_hook.load_string(
+            string_data=csv_buffer,
+            key=baseline_key,
+            bucket_name=baseline_bucket,
+            replace=True,
+        )
 
-        # On s’assure de garder exactement les features
-        df_baseline = df_baseline[FEATURE_COLS]
+        # À partir d'ici, on a df_baseline prêt pour Evidently
 
         # -------------------------
         # 2) Charge données prod
@@ -271,6 +323,61 @@ with DAG(
                 subject="🚨 Drift détecté sur le modèle de fraude (Evidently)",
                 html=html_msg,
             )
+            
+                    # -------------------------
+        # 6) Insérer les prédictions du jour dans fraud_training_dataset
+        # -------------------------
+        with engine.begin() as conn:
+            insert_sql = text("""
+                INSERT INTO fraud_training_dataset (
+                    merchant,
+                    category,
+                    amt,
+                    gender,
+                    state,
+                    job,
+                    city_pop,
+                    lat,
+                    long,
+                    merch_lat,
+                    merch_long,
+                    dob,
+                    cc_num,
+                    trans_num,
+                    trans_date_trans_time,
+                    is_fraud
+                )
+                SELECT
+                    merchant,
+                    category,
+                    amt,
+                    gender,
+                    state,
+                    job,
+                    city_pop,
+                    NULL::numeric AS lat,
+                    NULL::numeric AS long,
+                    NULL::numeric AS merch_lat,
+                    NULL::numeric AS merch_long,
+                    NULL::date    AS dob,
+                    NULL::text    AS cc_num,
+                    NULL::text    AS trans_num,
+                    prediction_time::timestamp AS trans_date_trans_time,
+                    CASE 
+                        WHEN is_fraud = TRUE THEN 1
+                        ELSE 0
+                    END AS is_fraud
+                FROM fraud_realtime_predictions
+                WHERE prediction_time::date = CURRENT_DATE;
+            """)
+            result = conn.execute(insert_sql)
+
+            try:
+                rows = result.rowcount
+            except Exception:
+                rows = None
+
+            print(f"[DRIFT_MONITORING] Lignes insérées dans fraud_training_dataset : {rows}")
 
         return {
             "dataset_drift": bool(dataset_drift),

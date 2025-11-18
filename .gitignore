@@ -34,3 +34,4 @@ jenkins_home/
 *.egg-info/
 dist/
 build/
+images/
