@@ -324,7 +324,7 @@ with DAG(
                 html=html_msg,
             )
             
-                    # -------------------------
+              # -------------------------
         # 6) Insérer les prédictions du jour dans fraud_training_dataset
         # -------------------------
         with engine.begin() as conn:
@@ -355,13 +355,13 @@ with DAG(
                     state,
                     job,
                     city_pop,
-                    NULL::numeric AS lat,
-                    NULL::numeric AS long,
-                    NULL::numeric AS merch_lat,
-                    NULL::numeric AS merch_long,
-                    NULL::date    AS dob,
-                    NULL::text    AS cc_num,
-                    NULL::text    AS trans_num,
+                    lat,
+                    long,
+                    merch_lat,
+                    merch_long,
+                    dob,
+                    cc_num,
+                    trans_num,
                     prediction_time::timestamp AS trans_date_trans_time,
                     CASE 
                         WHEN is_fraud = TRUE THEN 1
