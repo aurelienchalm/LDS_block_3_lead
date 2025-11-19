@@ -9,7 +9,7 @@ import requests
 import time
 
 
-JENKINS_JOB_NAME = "stripe_test_train"  
+JENKINS_JOB_NAME = "fraud_test_train"  
 
 
 def send_failure_email(context):
