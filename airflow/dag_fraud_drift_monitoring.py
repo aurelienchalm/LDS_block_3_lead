@@ -109,7 +109,7 @@ def send_resend_email(subject: str, html: str):
 with DAG(
     dag_id="fraud_drift_monitoring",
     start_date=datetime(2025, 1, 1),
-    schedule="@daily",           # 1 fois par jour
+    schedule="0 2 * * *",
     catchup=False,
     default_args=default_args,
     tags=["fraud", "drift", "evidently"],
@@ -194,7 +194,7 @@ with DAG(
         # 2) Charge données prod
         # -------------------------
         engine = get_neondb_engine()
-
+        # pour la journée d'hier
         query = """
         SELECT
             merchant,
@@ -212,7 +212,8 @@ with DAG(
             hour,
             is_weekend
         FROM fraud_realtime_predictions
-        WHERE prediction_time::date = CURRENT_DATE
+        WHERE prediction_time >= CURRENT_DATE - INTERVAL '1 day'
+        AND prediction_time < CURRENT_DATE
         """
 
         df_current = pd.read_sql(query, con=engine)
