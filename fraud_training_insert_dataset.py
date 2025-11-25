@@ -2,13 +2,15 @@
 
 import os
 from pathlib import Path
+import io
 
 import pandas as pd
+import boto3
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
 # ─────────────────────────────────────────
-# 1. Config & connexion NeonDB
+# 1. Config & connexion NeonDB + S3
 # ─────────────────────────────────────────
 
 ROOT = Path(__file__).resolve().parent
@@ -20,8 +22,32 @@ if ENV_PATH.exists():
 DATABASE_URL = os.getenv("POSTGRES_DATABASE")
 assert DATABASE_URL, "Variable d'environnement POSTGRES_DATABASE manquante dans le .env"
 
-# Chemin vers le CSV (adapter si besoin)
-CSV_PATH = Path("data/fraudTestLight.csv")
+BUCKET_NAME = os.getenv("BUCKET_NAME")
+S3_KEY = os.getenv("FRAUD_DATASET_S3_KEY")
+AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "eu-west-3")
+
+assert BUCKET_NAME, "BUCKET_NAME manquant dans le .env"
+assert S3_KEY, "FRAUD_DATASET_S3_KEY manquant dans le .env"
+
+
+def load_csv_from_s3() -> pd.DataFrame:
+    """
+    Charge le CSV d'entraînement depuis S3 :
+      - Bucket : BUCKET_NAME
+      - Key    : S3_KEY
+    """
+    print(f"📥 Téléchargement du CSV depuis S3 : s3://{BUCKET_NAME}/{S3_KEY}")
+
+    # boto3 utilisera AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION
+    s3 = boto3.client("s3", region_name=AWS_REGION)
+
+    obj = s3.get_object(Bucket=BUCKET_NAME, Key=S3_KEY)
+    csv_bytes = obj["Body"].read()
+    csv_str = csv_bytes.decode("utf-8")
+
+    df = pd.read_csv(io.StringIO(csv_str))
+    print(f"✅ CSV S3 chargé avec {len(df)} lignes et {len(df.columns)} colonnes.")
+    return df
 
 
 # ─────────────────────────────────────────
@@ -29,14 +55,8 @@ CSV_PATH = Path("data/fraudTestLight.csv")
 # ─────────────────────────────────────────
 
 def load_csv_into_fraud_training_dataset():
-    print(f"Chargement du CSV : {CSV_PATH}")
-    if not CSV_PATH.exists():
-        raise FileNotFoundError(f"Fichier introuvable : {CSV_PATH}")
-
-    # Lecture brute du CSV
-    df = pd.read_csv(CSV_PATH)
-
-    print(f"✅ CSV chargé avec {len(df)} lignes et {len(df.columns)} colonnes.")
+    # 2.1 Lecture brute du CSV depuis S3
+    df = load_csv_from_s3()
 
     # Colonnes attendues dans le CSV original (fraudTest)
     expected_cols = [
@@ -69,10 +89,6 @@ def load_csv_into_fraud_training_dataset():
         raise ValueError(f"❌ Colonnes manquantes dans le CSV : {missing}")
 
     # On ne garde que ce qui nous intéresse pour la table fraud_training_dataset
-    # Schéma cible :
-    #   merchant, category, amt, gender, state, job, city_pop,
-    #   lat, long, merch_lat, merch_long, dob, cc_num, trans_num,
-    #   trans_date_trans_time, is_fraud, created_at (géré par DEFAULT now())
     df_out = df[
         [
             "merchant",
@@ -122,7 +138,11 @@ def load_csv_into_fraud_training_dataset():
     df_out["trans_num"] = df_out["trans_num"].astype(str)
 
     # Target
-    df_out["is_fraud"] = pd.to_numeric(df_out["is_fraud"], errors="coerce").fillna(0).astype(int)
+    df_out["is_fraud"] = (
+        pd.to_numeric(df_out["is_fraud"], errors="coerce")
+        .fillna(0)
+        .astype(int)
+    )
 
     print("🧹 Types nettoyés, préparation pour insertion en base...")
     print(df_out.dtypes)
@@ -148,7 +168,7 @@ def load_csv_into_fraud_training_dataset():
             chunk.to_sql(
                 table_name,
                 con=conn,
-                if_exists="append",
+                if_exists="append",  # 👉 on conserve l'historique
                 index=False,
                 method="multi",
             )
