@@ -26,6 +26,7 @@ from xgboost import XGBClassifier
 import mlflow
 from mlflow.tracking import MlflowClient
 from mlflow.models import infer_signature
+from fraud_training_insert_dataset import load_csv_into_fraud_training_dataset
 
 
 # ─────────────────────────────────────────────
@@ -154,6 +155,9 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────
 
 def main():
+    # 0) Charger le CSV labelisé par le métier dans fraud_training_dataset
+    print("🔄 Insertion des données depuis le csv labelisé par le metier ...")
+    load_csv_into_fraud_training_dataset()
     # 3.1 Charger les données depuis NeonDB
     print("🔄 Chargement des données depuis fraud_training_dataset ...")
     

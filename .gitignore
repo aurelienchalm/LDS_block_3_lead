@@ -20,7 +20,8 @@ __pycache__/
 airflow.txt
 logs/
 dags/__pycache__/
-data/
+#data/
+save/
 
 # Jenkins (si jamais tu stockes du Jenkinsfile ou logs)
 jenkins_home/

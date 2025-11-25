@@ -120,7 +120,7 @@ def test_fraud_training_end_to_end():
     assert os.getenv("MODEL_NAME"), "MODEL_NAME doit être défini dans le .env"
     assert os.getenv("REGISTERED_NAME"), "REGISTERED_NAME doit être défini dans le .env"
 
-    # Appel direct à la fonction main() de ton script
+    # Appel direct à la fonction main() du script
     main()
         
 

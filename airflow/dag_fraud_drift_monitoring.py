@@ -324,61 +324,6 @@ with DAG(
                 html=html_msg,
             )
             
-              # -------------------------
-        # 6) Insérer les prédictions du jour dans fraud_training_dataset
-        # -------------------------
-        with engine.begin() as conn:
-            insert_sql = text("""
-                INSERT INTO fraud_training_dataset (
-                    merchant,
-                    category,
-                    amt,
-                    gender,
-                    state,
-                    job,
-                    city_pop,
-                    lat,
-                    long,
-                    merch_lat,
-                    merch_long,
-                    dob,
-                    cc_num,
-                    trans_num,
-                    trans_date_trans_time,
-                    is_fraud
-                )
-                SELECT
-                    merchant,
-                    category,
-                    amt,
-                    gender,
-                    state,
-                    job,
-                    city_pop,
-                    lat,
-                    long,
-                    merch_lat,
-                    merch_long,
-                    dob,
-                    cc_num,
-                    trans_num,
-                    prediction_time::timestamp AS trans_date_trans_time,
-                    CASE 
-                        WHEN is_fraud = TRUE THEN 1
-                        ELSE 0
-                    END AS is_fraud
-                FROM fraud_realtime_predictions
-                WHERE prediction_time::date = CURRENT_DATE;
-            """)
-            result = conn.execute(insert_sql)
-
-            try:
-                rows = result.rowcount
-            except Exception:
-                rows = None
-
-            print(f"[DRIFT_MONITORING] Lignes insérées dans fraud_training_dataset : {rows}")
-
         return {
             "dataset_drift": bool(dataset_drift),
             "share_drifted": float(share_drifted) if share_drifted is not None else None,

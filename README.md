@@ -5,10 +5,10 @@ Ce projet vise à **détecter automatiquement les transactions frauduleuses** à
 
 Le pipeline complet combine :
 - un **entraînement de modèle XGBoost** avec pipeline de preprocessing sklearn,
-- une **expérimentation et versioning via MLflow**,
+- un **enregistrement et versioning du modèle dans MLflow**,
 - une **API FastAPI de prédiction** déployable en container Docker,
 - une **API temps réel de simulation de transactions**,
-- et une intégration prête pour Airflow (future automatisation ETL).
+- et une intégration prête pour Airflow (automatisation ETL).
 
 ---
 
@@ -18,25 +18,26 @@ Le pipeline complet combine :
 fraud-detection/
 │
 ├── data/
-│   └── fraudTest.csv             # Dataset de référence
+│   └── fraudTest.csv                   # Dataset de référence
 │
 ├── app/
-│   ├── main.py                   # API FastAPI (endpoint /predict & /realtime-predict)
-│   ├── model_utils.py            # Fonctions de chargement du modèle champion depuis MLflow
-│   ├── requirements.txt          # Dépendances FastAPI + MLflow + XGBoost
-│   └── Dockerfile                # Image Docker pour déploiement FastAPI
+│   ├── main.py                         # API FastAPI (endpoint /predict & /realtime-predict)
+│   ├── model_utils.py                  # Fonctions de chargement du modèle champion depuis MLflow
+│   ├── requirements.txt                # Dépendances FastAPI + MLflow + XGBoost
+│   └── Dockerfile                      # Image Docker pour déploiement FastAPI
 │
 ├── realtime-api/
-│   ├── main.py                   # API simulant le flux de paiements en temps réel
+│   ├── main.py                         # API simulant le flux de paiements en temps réel
 │   ├── templates/
 │   │   └── index.html
 │   ├── static/
 │   │   └── style.css
-│   ├── requirements.txt          # Dépendances pour SlowAPI + Jinja2
+│   ├── requirements.txt                # Dépendances pour SlowAPI + Jinja2
 │   └── Dockerfile
 │
-├── csv_to_neondb.ipynb     # chargement en db du csv de train
-├── fraud_detection.ipynb  # Entraînement + logging MLflow
+├── csv_to_neondb.ipynb                 # chargement en db du csv de train
+├── fraud_detection.ipynb               # Entraînement + logging MLflow
+├── init_fraud_training_dataset.ipynb   # Creation initiale de la table fraud_training_dataset (entrainement du modèle)
 │
 ├── .env                         # Variables d'environnement (MLflow, NeonDB, etc.)
 └── README.md
