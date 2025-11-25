@@ -8,7 +8,8 @@ Le pipeline complet combine :
 - un **enregistrement et versioning du modèle dans MLflow**,
 - une **API FastAPI de prédiction** déployable en container Docker,
 - une **API temps réel de simulation de transactions**,
-- et une intégration prête pour Airflow (automatisation ETL).
+- orchestration Airflow (Jenkins CI/CD)
+- Evidently
 
 ---
 
@@ -17,6 +18,11 @@ Le pipeline complet combine :
 ```
 fraud-detection/
 │
+├── airflow/                            #DAGS du projet
+│   ├── dag_fraud_drift_monitoring.py                         
+│   ├── dag_fraud_realtime_predict.py                
+│   ├── dag_fraud_realtime_report.py
+│   └── dag_fraud_realtime_report
 ├── data/
 │   └── fraudTest.csv                   # Dataset de référence
 │
@@ -25,6 +31,14 @@ fraud-detection/
 │   ├── model_utils.py                  # Fonctions de chargement du modèle champion depuis MLflow
 │   ├── requirements.txt                # Dépendances FastAPI + MLflow + XGBoost
 │   └── Dockerfile                      # Image Docker pour déploiement FastAPI
+│
+├── app_streamlit/
+│   ├── app.py
+│   ├── requirements.txt
+│   └── Dockerfile
+│
+├── jenkins/
+│   └── Jenkinsfile.train
 │
 ├── realtime-api/
 │   ├── main.py                         # API simulant le flux de paiements en temps réel
@@ -35,11 +49,17 @@ fraud-detection/
 │   ├── requirements.txt                # Dépendances pour SlowAPI + Jinja2
 │   └── Dockerfile
 │
-├── csv_to_neondb.ipynb                 # chargement en db du csv de train
-├── fraud_detection.ipynb               # Entraînement + logging MLflow
-├── init_fraud_training_dataset.ipynb   # Creation initiale de la table fraud_training_dataset (entrainement du modèle)
+├── test/
+│   ├── test_fraud_training.py
+│   ├── requirements.txt
+│   └── Dockerfile.train
 │
-├── .env                         # Variables d'environnement (MLflow, NeonDB, etc.)
+├── fraud_detection.ipynb               # Notebook chargement en db du csv de train
+├── fraud_training.py                   # Entraînement + logging MLflow
+├── fraud_training_insert_dataset.py    # Chargement depuis le S3 du csv d'entrainement ou de reentrainement + insert en base
+│
+├── LDS_Block_3_Lead.pptx               # pptx du projet
+├── .env                                # Variables d'environnement (MLflow, NeonDB, etc.)
 └── README.md
 ```
 
@@ -262,10 +282,11 @@ docker rm -f fraud-streamlit
 
 ## 🚀 Airflow comme orchestrateur
 
-3 DAG orchestrent : 
+4 DAG orchestrent : 
 - La prédiction depuis l'api temps réél
 - L'emission d'un reporting journalier de toutes les prédictions du jour
 - Le drift de la donnée avec Evidently 
+- Le réentrainement du modèle 
 
 ---
 
