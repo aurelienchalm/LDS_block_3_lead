@@ -67,7 +67,7 @@ def send_resend_email(subject: str, html: str):
 with DAG(
     dag_id="daily_fraud_report",
     start_date=datetime(2025, 1, 1),
-    schedule_interval="0 7 * * *",
+    schedule_interval="0 1 * * *",
     catchup=False,
     default_args=default_args,
     tags=["fraud", "reporting"],
@@ -103,14 +103,16 @@ with DAG(
         else:
             fraud_table_html = fraud_df.head(20).to_html(index=False)
 
-        html = f"""
-        <h2>📊 Rapport Fraude — {datetime.now().date()}</h2>
-        <p><b>Total transactions :</b> {total}</p>
-        <p><b>Fraudes détectées :</b> {fraudulent}</p>
-        <p><b>Taux de fraude :</b> {fraud_rate}%</p>
+        yesterday = (datetime.now() - timedelta(days=1)).date()
 
-        <h3>Top 20 fraudes :</h3>
-        {fraud_table_html}
+        html = f"""
+            <h2>📊 Rapport Fraude — {yesterday}</h2>
+            <p><b>Total transactions :</b> {total}</p>
+            <p><b>Fraudes détectées :</b> {fraudulent}</p>
+            <p><b>Taux de fraude :</b> {fraud_rate}%</p>
+
+            <h3>Top 20 fraudes :</h3>
+            {fraud_table_html}
         """
 
         return html
