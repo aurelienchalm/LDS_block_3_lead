@@ -37,7 +37,7 @@ fraud-detection/
 │   ├── requirements.txt
 │   └── Dockerfile
 │
-├── jenkins/
+├── jenkins/                            #Jenkinsfiles
 │   └── Jenkinsfile.train
 │
 ├── realtime-api/
@@ -54,8 +54,8 @@ fraud-detection/
 │   ├── requirements.txt
 │   └── Dockerfile.train
 │
-├── fraud_detection.ipynb               # Notebook chargement en db du csv de train
-├── fraud_training.py                   # Entraînement + logging MLflow
+├── fraud_detection.ipynb               # Notebook de dev du modèle (EDA, preproc, sklearn, MLflow)
+├── fraud_training.py                   # Réentraînement du modèle
 ├── fraud_training_insert_dataset.py    # Chargement depuis le S3 du csv d'entrainement ou de reentrainement + insert en base
 │
 ├── LDS_Block_3_Lead.pptx               # pptx du projet
