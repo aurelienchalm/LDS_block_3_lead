@@ -47,7 +47,7 @@ pipeline {
         stage('Lancer les tests (retrain)') {
             steps {
                 script {
-                    // Le CMD du Dockerfile lance pytest ou ton script
+                    // Le CMD du Dockerfile lance pytest ou un script
                     sh """
                     docker run --rm \
                       --env-file $ENV_PATH \

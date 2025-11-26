@@ -314,7 +314,7 @@ def realtime_predict():
 
 
 # ─────────────────────────────────────────────
-# Lancement local (optionnel si tu utilises uvicorn en ligne de commande)
+# Lancement local
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
